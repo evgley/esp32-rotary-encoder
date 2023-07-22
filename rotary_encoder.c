@@ -113,7 +113,7 @@
 #define H_CW_BEGIN_M  0x4
 #define H_CCW_BEGIN_M 0x5
 
-static const uint8_t _ttable_half[TABLE_ROWS][TABLE_COLS] = {
+static DRAM_ATTR const uint8_t _ttable_half[TABLE_ROWS][TABLE_COLS] = {
     // 00                  01              10            11                   // BA
     {H_START_M,            H_CW_BEGIN,     H_CCW_BEGIN,  R_START},            // R_START (00)
     {H_START_M | DIR_CCW,  R_START,        H_CCW_BEGIN,  R_START},            // H_CCW_BEGIN
@@ -131,7 +131,7 @@ static const uint8_t _ttable_half[TABLE_ROWS][TABLE_COLS] = {
 #  define F_CCW_FINAL 0x5
 #  define F_CCW_NEXT  0x6
 
-static const uint8_t _ttable_full[TABLE_ROWS][TABLE_COLS] = {
+static DRAM_ATTR const uint8_t _ttable_full[TABLE_ROWS][TABLE_COLS] = {
     // 00        01           10           11                  // BA
     {R_START,    F_CW_BEGIN,  F_CCW_BEGIN, R_START},           // R_START
     {F_CW_NEXT,  R_START,     F_CW_FINAL,  R_START | DIR_CW},  // F_CW_FINAL
@@ -142,7 +142,7 @@ static const uint8_t _ttable_full[TABLE_ROWS][TABLE_COLS] = {
     {F_CCW_NEXT, F_CCW_FINAL, F_CCW_BEGIN, R_START},           // F_CCW_NEXT
 };
 
-static uint8_t _process(rotary_encoder_info_t * info)
+static uint8_t IRAM_ATTR _process(rotary_encoder_info_t * info)
 {
     uint8_t event = 0;
     if (info != NULL)
@@ -166,7 +166,7 @@ static uint8_t _process(rotary_encoder_info_t * info)
     return event;
 }
 
-static void _isr_rotenc(void * args)
+static void IRAM_ATTR _isr_rotenc(void * args)
 {
     rotary_encoder_info_t * info = (rotary_encoder_info_t *)args;
     uint8_t event = _process(info);
@@ -220,15 +220,18 @@ esp_err_t rotary_encoder_init(rotary_encoder_info_t * info, gpio_num_t pin_a, gp
         info->state.direction = ROTARY_ENCODER_DIRECTION_NOT_SET;
 
         // configure GPIOs
-        gpio_pad_select_gpio(info->pin_a);
-        gpio_set_pull_mode(info->pin_a, GPIO_PULLUP_ONLY);
-        gpio_set_direction(info->pin_a, GPIO_MODE_INPUT);
-        gpio_set_intr_type(info->pin_a, GPIO_INTR_ANYEDGE);
+        gpio_config_t gpio_conf;
 
-        gpio_pad_select_gpio(info->pin_b);
-        gpio_set_pull_mode(info->pin_b, GPIO_PULLUP_ONLY);
-        gpio_set_direction(info->pin_b, GPIO_MODE_INPUT);
-        gpio_set_intr_type(info->pin_b, GPIO_INTR_ANYEDGE);
+        gpio_conf.pin_bit_mask = 1ULL << info->pin_a | 1ULL << info->pin_b;
+        gpio_conf.mode = GPIO_MODE_INPUT;
+        gpio_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+        gpio_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        gpio_conf.intr_type = GPIO_INTR_ANYEDGE;
+
+        gpio_config(&gpio_conf);
+
+        /* Install ISR service */
+        gpio_install_isr_service(0);
 
         // install interrupt handlers
         gpio_isr_handler_add(info->pin_a, _isr_rotenc, info);
